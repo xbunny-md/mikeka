@@ -1,0 +1,8 @@
+{
+  "name": "Remix SportyBet Odds Hunter",
+  "description": "Real-time SportyBet Tanzania football odds scanner, advanced filter engine, intelligent betslip builder, and verified booking code generator.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

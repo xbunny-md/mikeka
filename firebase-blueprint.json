@@ -1,0 +1,580 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User preferences and account profile metadata isolated per authenticated owner.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 254
+        },
+        "defaultMinOdds": { "type": "number" },
+        "defaultMaxOdds": { "type": "number" },
+        "defaultStakeTzs": { "type": "number" },
+        "autoScanIntervalSec": { "type": "number" },
+        "themePreference": { "type": "string", "enum": ["dark", "light"] },
+        "preferredBookmaker": { "type": "string", "enum": ["SPORTYBET_TZ", "BETPAWA_TZ"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "uid",
+        "displayName",
+        "email",
+        "defaultMinOdds",
+        "defaultMaxOdds",
+        "defaultStakeTzs",
+        "autoScanIntervalSec",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ScanHistory": {
+      "title": "ScanHistory",
+      "description": "Persisted odds scan execution record including applied filters and bounded qualifying selections preview.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "dataSource": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "status": { "type": "string", "enum": ["COMPLETED", "PARTIAL", "FAILED"] },
+        "totalMatchesScanned": { "type": "number" },
+        "qualifyingCount": { "type": "number" },
+        "minOdds": { "type": "number" },
+        "maxOdds": { "type": "number" },
+        "startDate": { "type": "string", "maxLength": 40 },
+        "endDate": { "type": "string", "maxLength": 40 },
+        "markets": { "type": "array" },
+        "leagues": { "type": "array" },
+        "matchStatus": { "type": "string", "enum": ["ALL", "UPCOMING", "LIVE"] },
+        "resultsPreview": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId",
+        "dataSource",
+        "status",
+        "totalMatchesScanned",
+        "qualifyingCount",
+        "minOdds",
+        "maxOdds",
+        "startDate",
+        "endDate",
+        "markets",
+        "leagues",
+        "matchStatus",
+        "resultsPreview",
+        "createdAt"
+      ]
+    },
+    "BookingCodeRecord": {
+      "title": "BookingCodeRecord",
+      "description": "Verified SportyBet Tanzania sharing code generated or imported by the user.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "shareCode": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 32,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "shareUrl": { "type": "string", "minLength": 10, "maxLength": 300 },
+        "deadline": { "type": "number" },
+        "selectionCount": { "type": "number" },
+        "combinedOdds": { "type": "number" },
+        "stakeTzs": { "type": "number" },
+        "estimatedReturnTzs": { "type": "number" },
+        "status": { "type": "string", "enum": ["ACTIVE", "EXPIRED", "INVALID"] },
+        "selections": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId",
+        "shareCode",
+        "shareUrl",
+        "deadline",
+        "selectionCount",
+        "combinedOdds",
+        "stakeTzs",
+        "estimatedReturnTzs",
+        "status",
+        "selections",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "FilterPreset": {
+      "title": "FilterPreset",
+      "description": "Saved scanner filter preset owned by a user.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "minOdds": { "type": "number" },
+        "maxOdds": { "type": "number" },
+        "markets": { "type": "array" },
+        "leagues": { "type": "array" },
+        "matchStatus": { "type": "string", "enum": ["ALL", "UPCOMING", "LIVE"] },
+        "maxResults": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId",
+        "name",
+        "minOdds",
+        "maxOdds",
+        "markets",
+        "leagues",
+        "matchStatus",
+        "maxResults",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "FavoriteItem": {
+      "title": "FavoriteItem",
+      "description": "User favorite league, team, or betting market.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "kind": { "type": "string", "enum": ["LEAGUE", "TEAM", "MARKET"] },
+        "refId": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "label": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "country": { "type": "string", "maxLength": 100 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "kind", "refId", "label", "country", "createdAt"]
+    },
+    "UserFavoriteTicketRecord": {
+      "title": "UserFavoriteTicketRecord",
+      "description": "User bookmarked ticket reference from the shared daily ticket feed.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "internalTicketId": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "categoryLabel": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "combinedOdds": { "type": "number" },
+        "selectionCount": { "type": "number" },
+        "generatedDateKey": { "type": "string", "minLength": 8, "maxLength": 20 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId",
+        "internalTicketId",
+        "categoryLabel",
+        "combinedOdds",
+        "selectionCount",
+        "generatedDateKey",
+        "createdAt"
+      ]
+    },
+    "AppNotification": {
+      "title": "AppNotification",
+      "description": "Real operational notification generated from scanner, validation, or booking code actions.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["SCAN_COMPLETE", "ODDS_SHIFT", "MARKET_UNAVAILABLE", "CODE_CREATED", "INTEGRATION_ERROR"]
+        },
+        "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "message": { "type": "string", "minLength": 1, "maxLength": 400 },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "type", "title", "message", "read", "createdAt"]
+    },
+    "AdminRoleRecord": {
+      "title": "AdminRoleRecord",
+      "description": "Authorized administrator registry document keyed by Firebase Auth UID.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": { "type": "string", "format": "email", "maxLength": 254 },
+        "role": { "type": "string", "enum": ["ADMIN"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role", "createdAt"]
+    },
+    "PublicTicketRecord": {
+      "title": "PublicTicketRecord",
+      "description": "Immutable shared daily ticket published to all users.",
+      "type": "object",
+      "properties": {
+        "isPublic": { "type": "boolean" },
+        "publishedByUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "internalTicketId": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "signature": { "type": "string", "minLength": 4, "maxLength": 160 },
+        "bookmakerId": { "type": "string", "enum": ["SPORTYBET_TZ", "BETPAWA_TZ"] },
+        "sourceType": { "type": "string", "enum": ["DAILY_FACTORY", "ADMIN_MANUAL"] },
+        "categoryId": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "categoryLabel": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "targetOdds": { "type": "number" },
+        "actualCombinedOdds": { "type": "number" },
+        "selectionCount": { "type": "number" },
+        "kickoffStartMs": { "type": "number" },
+        "kickoffEndMs": { "type": "number" },
+        "dataSource": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "generatedDateKey": { "type": "string", "minLength": 8, "maxLength": 20 },
+        "originalSelections": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "isPublic",
+        "publishedByUid",
+        "internalTicketId",
+        "signature",
+        "sourceType",
+        "categoryId",
+        "categoryLabel",
+        "targetOdds",
+        "actualCombinedOdds",
+        "selectionCount",
+        "kickoffStartMs",
+        "kickoffEndMs",
+        "dataSource",
+        "generatedDateKey",
+        "originalSelections",
+        "createdAt"
+      ]
+    },
+    "PublicTicketUpdateRecord": {
+      "title": "PublicTicketUpdateRecord",
+      "description": "Mutable settlement updates and verified SportyBet sharing code linkage for public daily tickets.",
+      "type": "object",
+      "properties": {
+        "isPublic": { "type": "boolean" },
+        "internalTicketId": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["PENDING", "LIVE", "WON", "LOST", "VOID", "PARTIALLY_SETTLED", "UNVERIFIED"]
+        },
+        "effectiveCombinedOdds": { "type": "number" },
+        "shareCode": { "type": "string", "maxLength": 32 },
+        "shareUrl": { "type": "string", "maxLength": 300 },
+        "shareCodeVerified": { "type": "boolean" },
+        "bookingCodeStatus": { "type": "string", "enum": ["GENERATED", "FAILED", "NOT_REQUESTED"] },
+        "bookingCodeError": { "type": "string", "maxLength": 300 },
+        "selectionSettlements": { "type": "array" },
+        "settledAt": { "type": "string", "maxLength": 40 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "isPublic",
+        "internalTicketId",
+        "status",
+        "effectiveCombinedOdds",
+        "shareCode",
+        "shareUrl",
+        "shareCodeVerified",
+        "bookingCodeStatus",
+        "bookingCodeError",
+        "selectionSettlements",
+        "settledAt",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AdminSettingsRecord": {
+      "title": "AdminSettingsRecord",
+      "description": "Global Daily Factory generation parameters accessible strictly to administrators.",
+      "type": "object",
+      "properties": {
+        "updatedByUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "updatedByEmail": { "type": "string", "format": "email", "maxLength": 254 },
+        "enabled": { "type": "boolean" },
+        "paused": { "type": "boolean" },
+        "activeBookmaker": { "type": "string", "enum": ["SPORTYBET_TZ", "BETPAWA_TZ"] },
+        "minIndividualOdds": { "type": "number" },
+        "maxIndividualOdds": { "type": "number" },
+        "dailyTicketTarget": { "type": "number" },
+        "maxTickets": { "type": "number" },
+        "minSelections": { "type": "number" },
+        "maxSelections": { "type": "number" },
+        "anyMarket": { "type": "boolean" },
+        "markets": { "type": "array" },
+        "windowStartTime": { "type": "string", "maxLength": 10 },
+        "windowEndTime": { "type": "string", "maxLength": 10 },
+        "timezone": { "type": "string", "maxLength": 60 },
+        "scheduleIntervalMinutes": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "updatedByUid",
+        "updatedByEmail",
+        "enabled",
+        "paused",
+        "minIndividualOdds",
+        "maxIndividualOdds",
+        "dailyTicketTarget",
+        "maxTickets",
+        "minSelections",
+        "maxSelections",
+        "anyMarket",
+        "markets",
+        "windowStartTime",
+        "windowEndTime",
+        "timezone",
+        "scheduleIntervalMinutes",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "PublicStatsRecord": {
+      "title": "PublicStatsRecord",
+      "description": "Public daily factory counter snapshot shared cleanly with all users.",
+      "type": "object",
+      "properties": {
+        "isPublic": { "type": "boolean" },
+        "dailyTicketTarget": { "type": "number" },
+        "totalGeneratedToday": { "type": "number" },
+        "bookingCodesGeneratedToday": { "type": "number" },
+        "lastScanningAt": { "type": "string", "maxLength": 40 },
+        "lastSettlementAt": { "type": "string", "maxLength": 40 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "isPublic",
+        "dailyTicketTarget",
+        "totalGeneratedToday",
+        "bookingCodesGeneratedToday",
+        "lastScanningAt",
+        "lastSettlementAt",
+        "updatedAt"
+      ]
+    },
+    "AdminAuditLogRecord": {
+      "title": "AdminAuditLogRecord",
+      "description": "Immutable log of administrator actions and scheduled factory executions.",
+      "type": "object",
+      "properties": {
+        "scope": { "type": "string", "enum": ["ADMIN_AUDIT"] },
+        "actorUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "actorEmail": { "type": "string", "format": "email", "maxLength": 254 },
+        "actionType": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "status": { "type": "string", "enum": ["SUCCESS", "PARTIAL", "SKIPPED", "FAILED"] },
+        "ticketsGenerated": { "type": "number" },
+        "codesCreated": { "type": "number" },
+        "message": { "type": "string", "minLength": 1, "maxLength": 400 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "scope",
+        "actorUid",
+        "actorEmail",
+        "actionType",
+        "status",
+        "ticketsGenerated",
+        "codesCreated",
+        "message",
+        "createdAt"
+      ]
+    },
+    "TransferRecord": {
+      "title": "TransferRecord",
+      "description": "User cross-bookmaker bet transfer record between SportyBet TZ and betPawa TZ.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "transferId": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "direction": {
+          "type": "string",
+          "enum": ["SPORTYBET_TO_BETPAWA", "BETPAWA_TO_SPORTYBET"]
+        },
+        "sourceBookmaker": { "type": "string", "enum": ["SPORTYBET_TZ", "BETPAWA_TZ"] },
+        "targetBookmaker": { "type": "string", "enum": ["SPORTYBET_TZ", "BETPAWA_TZ"] },
+        "originalCode": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "targetBookingCode": { "type": "string", "maxLength": 32 },
+        "targetShareUrl": { "type": "string", "maxLength": 300 },
+        "status": {
+          "type": "string",
+          "enum": [
+            "READY_TO_REVIEW",
+            "PARTIALLY_MATCHED",
+            "UNAVAILABLE_SELECTIONS",
+            "WAITING_FOR_CONFIRMATION",
+            "TRANSFERRED",
+            "MANUAL_IMPORT_REQUIRED",
+            "FAILED"
+          ]
+        },
+        "originalSelectionCount": { "type": "number" },
+        "matchedCount": { "type": "number" },
+        "unmatchedCount": { "type": "number" },
+        "originalCombinedOdds": { "type": "number" },
+        "targetCombinedOdds": { "type": "number" },
+        "errorMessage": { "type": "string", "maxLength": 300 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId",
+        "transferId",
+        "direction",
+        "sourceBookmaker",
+        "targetBookmaker",
+        "originalCode",
+        "targetBookingCode",
+        "targetShareUrl",
+        "status",
+        "originalSelectionCount",
+        "matchedCount",
+        "unmatchedCount",
+        "originalCombinedOdds",
+        "targetCombinedOdds",
+        "errorMessage",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private user settings and profile document keyed by Firebase Auth UID."
+    },
+    "/users/{userId}/scanHistory/{scanId}": {
+      "schema": { "$ref": "#/entities/ScanHistory" },
+      "description": "User's saved odds scanner execution history."
+    },
+    "/users/{userId}/bookingCodes/{codeId}": {
+      "schema": { "$ref": "#/entities/BookingCodeRecord" },
+      "description": "User's verified SportyBet Tanzania booking codes."
+    },
+    "/users/{userId}/presets/{presetId}": {
+      "schema": { "$ref": "#/entities/FilterPreset" },
+      "description": "User's saved scanner filter presets."
+    },
+    "/users/{userId}/favorites/{favoriteId}": {
+      "schema": { "$ref": "#/entities/FavoriteItem" },
+      "description": "User's saved favorite leagues, teams, and markets."
+    },
+    "/users/{userId}/favoriteTickets/{ticketId}": {
+      "schema": { "$ref": "#/entities/UserFavoriteTicketRecord" },
+      "description": "User's saved favorite tickets bookmarked from the shared daily feed."
+    },
+    "/users/{userId}/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/AppNotification" },
+      "description": "User's real operational notification log."
+    },
+    "/users/{userId}/transfers/{transferId}": {
+      "schema": { "$ref": "#/entities/TransferRecord" },
+      "description": "User's cross-bookmaker bet transfer history between SportyBet TZ and betPawa TZ."
+    },
+    "/admins/{adminUid}": {
+      "schema": { "$ref": "#/entities/AdminRoleRecord" },
+      "description": "Authorized administrator registry keyed by UID."
+    },
+    "/publicTickets/{ticketId}": {
+      "schema": { "$ref": "#/entities/PublicTicketRecord" },
+      "description": "Immutable daily tickets shared publicly for all users."
+    },
+    "/publicTicketUpdates/{ticketId}": {
+      "schema": { "$ref": "#/entities/PublicTicketUpdateRecord" },
+      "description": "Mutable settlement updates and verified SportyBet booking code links for public daily tickets."
+    },
+    "/adminSettings/{settingId}": {
+      "schema": { "$ref": "#/entities/AdminSettingsRecord" },
+      "description": "Global administrator Daily Factory settings."
+    },
+    "/publicStats/{statId}": {
+      "schema": { "$ref": "#/entities/PublicStatsRecord" },
+      "description": "Public daily factory counter snapshot."
+    },
+    "/adminAuditLogs/{logId}": {
+      "schema": { "$ref": "#/entities/AdminAuditLogRecord" },
+      "description": "Immutable administrator audit and automation execution logs."
+    }
+  }
+}

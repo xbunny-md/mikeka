@@ -1,0 +1,614 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Connectivity probe document (read-only single doc get for client boot check)
+    match /test/connection {
+      allow get: if true;
+      allow list, write: if false;
+    }
+
+    // Shared hardened primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedOwner(userId) {
+      return isSignedIn()
+        && request.auth.uid == userId
+        && request.auth.token.email_verified == true;
+    }
+
+    function isBootstrappedAdmin() {
+      return isSignedIn()
+        && request.auth.token.email_verified == true
+        && (
+          request.auth.token.email == 'jkambi00@gmail.com'
+          || request.auth.token.email == 'xbotmanager@gmail.com'
+        );
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdmin()
+        || (
+          isSignedIn()
+          && request.auth.token.email_verified == true
+          && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+        );
+    }
+
+    function isValidString(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    function isValidBoundedStringList(arr, maxLen) {
+      return arr is list && arr.size() <= maxLen && (arr.size() == 0 || arr[0] is string);
+    }
+
+    // Validation Blueprints
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll([
+          'uid', 'displayName', 'email', 'defaultMinOdds',
+          'defaultMaxOdds', 'defaultStakeTzs', 'autoScanIntervalSec',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid', 'displayName', 'email', 'defaultMinOdds',
+          'defaultMaxOdds', 'defaultStakeTzs', 'autoScanIntervalSec',
+          'themePreference', 'preferredBookmaker',
+          'createdAt', 'updatedAt'
+        ])
+        && data.uid == userId
+        && isValidId(data.uid)
+        && isValidString(data.displayName, 1, 120)
+        && isValidString(data.email, 3, 254)
+        && data.defaultMinOdds is number && data.defaultMinOdds >= 1.01 && data.defaultMinOdds <= 100
+        && data.defaultMaxOdds is number && data.defaultMaxOdds >= data.defaultMinOdds && data.defaultMaxOdds <= 1000
+        && data.defaultStakeTzs is number && data.defaultStakeTzs >= 0 && data.defaultStakeTzs <= 100000000
+        && data.autoScanIntervalSec is number && data.autoScanIntervalSec >= 0 && data.autoScanIntervalSec <= 3600
+        && (!data.keys().hasAny(['themePreference']) || data.themePreference in ['dark', 'light'])
+        && (!data.keys().hasAny(['preferredBookmaker']) || data.preferredBookmaker in ['SPORTYBET_TZ', 'BETPAWA_TZ'])
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidScanHistory(data, userId) {
+      return data.keys().hasAll([
+          'userId', 'dataSource', 'status', 'totalMatchesScanned',
+          'qualifyingCount', 'minOdds', 'maxOdds', 'startDate',
+          'endDate', 'markets', 'leagues', 'matchStatus',
+          'resultsPreview', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'userId', 'dataSource', 'status', 'totalMatchesScanned',
+          'qualifyingCount', 'minOdds', 'maxOdds', 'startDate',
+          'endDate', 'markets', 'leagues', 'matchStatus',
+          'resultsPreview', 'createdAt'
+        ])
+        && data.userId == userId
+        && isValidId(data.userId)
+        && isValidString(data.dataSource, 1, 120)
+        && data.status in ['COMPLETED', 'PARTIAL', 'FAILED']
+        && data.totalMatchesScanned is number && data.totalMatchesScanned >= 0 && data.totalMatchesScanned <= 50000
+        && data.qualifyingCount is number && data.qualifyingCount >= 0 && data.qualifyingCount <= 50000
+        && data.minOdds is number && data.minOdds >= 1.01 && data.minOdds <= 1000
+        && data.maxOdds is number && data.maxOdds >= data.minOdds && data.maxOdds <= 10000
+        && isValidString(data.startDate, 0, 40)
+        && isValidString(data.endDate, 0, 40)
+        && isValidBoundedStringList(data.markets, 20)
+        && isValidBoundedStringList(data.leagues, 50)
+        && data.matchStatus in ['ALL', 'UPCOMING', 'LIVE']
+        && data.resultsPreview is list && data.resultsPreview.size() <= 25
+        && (data.resultsPreview.size() == 0 || data.resultsPreview[0] is map)
+        && data.createdAt is timestamp;
+    }
+
+    function isValidBookingCode(data, userId) {
+      return data.keys().hasAll([
+          'userId', 'shareCode', 'shareUrl', 'deadline',
+          'selectionCount', 'combinedOdds', 'stakeTzs',
+          'estimatedReturnTzs', 'status', 'selections',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'userId', 'shareCode', 'shareUrl', 'deadline',
+          'selectionCount', 'combinedOdds', 'stakeTzs',
+          'estimatedReturnTzs', 'status', 'selections',
+          'createdAt', 'updatedAt'
+        ])
+        && data.userId == userId
+        && isValidId(data.userId)
+        && isValidId(data.shareCode) && data.shareCode.size() >= 3 && data.shareCode.size() <= 32
+        && isValidString(data.shareUrl, 10, 300)
+        && data.deadline is number && data.deadline >= 0
+        && data.selectionCount is number && data.selectionCount >= 1 && data.selectionCount <= 30
+        && data.combinedOdds is number && data.combinedOdds >= 1.0
+        && data.stakeTzs is number && data.stakeTzs >= 0 && data.stakeTzs <= 100000000
+        && data.estimatedReturnTzs is number && data.estimatedReturnTzs >= 0
+        && data.status in ['ACTIVE', 'EXPIRED', 'INVALID']
+        && data.selections is list && data.selections.size() >= 1 && data.selections.size() <= 30
+        && data.selections[0] is map
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidFilterPreset(data, userId) {
+      return data.keys().hasAll([
+          'userId', 'name', 'minOdds', 'maxOdds',
+          'markets', 'leagues', 'matchStatus', 'maxResults',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'userId', 'name', 'minOdds', 'maxOdds',
+          'markets', 'leagues', 'matchStatus', 'maxResults',
+          'createdAt', 'updatedAt'
+        ])
+        && data.userId == userId
+        && isValidId(data.userId)
+        && isValidString(data.name, 1, 80)
+        && data.minOdds is number && data.minOdds >= 1.01 && data.minOdds <= 1000
+        && data.maxOdds is number && data.maxOdds >= data.minOdds && data.maxOdds <= 10000
+        && isValidBoundedStringList(data.markets, 20)
+        && isValidBoundedStringList(data.leagues, 50)
+        && data.matchStatus in ['ALL', 'UPCOMING', 'LIVE']
+        && data.maxResults is number && data.maxResults >= 1 && data.maxResults <= 500
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidFavoriteItem(data, userId) {
+      return data.keys().hasAll(['userId', 'kind', 'refId', 'label', 'country', 'createdAt'])
+        && data.keys().hasOnly(['userId', 'kind', 'refId', 'label', 'country', 'createdAt'])
+        && data.userId == userId
+        && isValidId(data.userId)
+        && data.kind in ['LEAGUE', 'TEAM', 'MARKET']
+        && isValidString(data.refId, 1, 120)
+        && isValidString(data.label, 1, 140)
+        && isValidString(data.country, 0, 100)
+        && data.createdAt is timestamp;
+    }
+
+    function isValidFavoriteTicket(data, userId) {
+      return data.keys().hasAll([
+          'userId', 'internalTicketId', 'categoryLabel', 'combinedOdds',
+          'selectionCount', 'generatedDateKey', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'userId', 'internalTicketId', 'categoryLabel', 'combinedOdds',
+          'selectionCount', 'generatedDateKey', 'createdAt'
+        ])
+        && data.userId == userId
+        && isValidId(data.userId)
+        && isValidId(data.internalTicketId) && data.internalTicketId.size() >= 3 && data.internalTicketId.size() <= 64
+        && isValidString(data.categoryLabel, 1, 60)
+        && data.combinedOdds is number && data.combinedOdds >= 1.0 && data.combinedOdds <= 1000000
+        && data.selectionCount is number && data.selectionCount >= 1 && data.selectionCount <= 30
+        && isValidString(data.generatedDateKey, 8, 20)
+        && data.createdAt is timestamp;
+    }
+
+    function isValidNotification(data, userId) {
+      return data.keys().hasAll(['userId', 'type', 'title', 'message', 'read', 'createdAt'])
+        && data.keys().hasOnly(['userId', 'type', 'title', 'message', 'read', 'createdAt'])
+        && data.userId == userId
+        && isValidId(data.userId)
+        && data.type in ['SCAN_COMPLETE', 'ODDS_SHIFT', 'MARKET_UNAVAILABLE', 'CODE_CREATED', 'INTEGRATION_ERROR']
+        && isValidString(data.title, 1, 120)
+        && isValidString(data.message, 1, 400)
+        && data.read is bool
+        && data.createdAt is timestamp;
+    }
+
+    function isValidTransferRecord(data, userId) {
+      return data.keys().hasAll([
+          'userId', 'transferId', 'direction', 'sourceBookmaker', 'targetBookmaker',
+          'originalCode', 'targetBookingCode', 'targetShareUrl', 'status',
+          'originalSelectionCount', 'matchedCount', 'unmatchedCount',
+          'originalCombinedOdds', 'targetCombinedOdds', 'errorMessage', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'userId', 'transferId', 'direction', 'sourceBookmaker', 'targetBookmaker',
+          'originalCode', 'targetBookingCode', 'targetShareUrl', 'status',
+          'originalSelectionCount', 'matchedCount', 'unmatchedCount',
+          'originalCombinedOdds', 'targetCombinedOdds', 'errorMessage', 'createdAt'
+        ])
+        && data.userId == userId
+        && isValidId(data.userId)
+        && isValidId(data.transferId) && data.transferId.size() >= 3 && data.transferId.size() <= 64
+        && data.direction in ['SPORTYBET_TO_BETPAWA', 'BETPAWA_TO_SPORTYBET']
+        && data.sourceBookmaker in ['SPORTYBET_TZ', 'BETPAWA_TZ']
+        && data.targetBookmaker in ['SPORTYBET_TZ', 'BETPAWA_TZ']
+        && isValidString(data.originalCode, 1, 32)
+        && isValidString(data.targetBookingCode, 0, 32)
+        && isValidString(data.targetShareUrl, 0, 300)
+        && data.status in [
+          'READY_TO_REVIEW', 'PARTIALLY_MATCHED', 'UNAVAILABLE_SELECTIONS',
+          'WAITING_FOR_CONFIRMATION', 'TRANSFERRED', 'MANUAL_IMPORT_REQUIRED', 'FAILED'
+        ]
+        && data.originalSelectionCount is number && data.originalSelectionCount >= 1 && data.originalSelectionCount <= 30
+        && data.matchedCount is number && data.matchedCount >= 0 && data.matchedCount <= 30
+        && data.unmatchedCount is number && data.unmatchedCount >= 0 && data.unmatchedCount <= 30
+        && data.originalCombinedOdds is number && data.originalCombinedOdds >= 1.0
+        && data.targetCombinedOdds is number && data.targetCombinedOdds >= 0
+        && isValidString(data.errorMessage, 0, 300)
+        && data.createdAt is timestamp;
+    }
+
+    function isValidAdminRole(data, adminUid) {
+      return data.keys().hasAll(['uid', 'email', 'role', 'createdAt'])
+        && data.keys().hasOnly(['uid', 'email', 'role', 'createdAt'])
+        && data.uid == adminUid
+        && isValidId(data.uid)
+        && isValidString(data.email, 3, 254)
+        && data.role == 'ADMIN'
+        && data.createdAt is timestamp;
+    }
+
+    function isValidPublicTicket(data) {
+      return data.keys().hasAll([
+          'isPublic', 'publishedByUid', 'internalTicketId', 'signature', 'sourceType',
+          'categoryId', 'categoryLabel', 'targetOdds', 'actualCombinedOdds',
+          'selectionCount', 'kickoffStartMs', 'kickoffEndMs', 'dataSource',
+          'generatedDateKey', 'originalSelections', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'isPublic', 'publishedByUid', 'internalTicketId', 'signature', 'bookmakerId',
+          'sourceType', 'categoryId', 'categoryLabel', 'targetOdds', 'actualCombinedOdds',
+          'selectionCount', 'kickoffStartMs', 'kickoffEndMs', 'dataSource',
+          'generatedDateKey', 'originalSelections', 'createdAt'
+        ])
+        && data.isPublic == true
+        && data.publishedByUid == request.auth.uid
+        && isValidId(data.publishedByUid)
+        && isValidId(data.internalTicketId) && data.internalTicketId.size() >= 3 && data.internalTicketId.size() <= 64
+        && isValidString(data.signature, 4, 160)
+        && (!data.keys().hasAny(['bookmakerId']) || data.bookmakerId in ['SPORTYBET_TZ', 'BETPAWA_TZ'])
+        && data.sourceType in ['DAILY_FACTORY', 'ADMIN_MANUAL']
+        && isValidString(data.categoryId, 1, 40)
+        && isValidString(data.categoryLabel, 1, 60)
+        && data.targetOdds is number && data.targetOdds >= 1.01 && data.targetOdds <= 100000
+        && data.actualCombinedOdds is number && data.actualCombinedOdds >= 1.01 && data.actualCombinedOdds <= 1000000
+        && data.selectionCount is number && data.selectionCount >= 1 && data.selectionCount <= 30
+        && data.kickoffStartMs is number && data.kickoffStartMs >= 0
+        && data.kickoffEndMs is number && data.kickoffEndMs >= data.kickoffStartMs
+        && isValidString(data.dataSource, 1, 120)
+        && isValidString(data.generatedDateKey, 8, 20)
+        && data.originalSelections is list && data.originalSelections.size() >= 1 && data.originalSelections.size() <= 30
+        && data.originalSelections[0] is map
+        && data.createdAt is timestamp;
+    }
+
+    function isValidPublicTicketUpdate(data) {
+      return data.keys().hasAll([
+          'isPublic', 'internalTicketId', 'status', 'effectiveCombinedOdds',
+          'shareCode', 'shareUrl', 'shareCodeVerified', 'bookingCodeStatus',
+          'bookingCodeError', 'selectionSettlements', 'settledAt', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'isPublic', 'internalTicketId', 'status', 'effectiveCombinedOdds',
+          'shareCode', 'shareUrl', 'shareCodeVerified', 'bookingCodeStatus',
+          'bookingCodeError', 'selectionSettlements', 'settledAt', 'createdAt', 'updatedAt'
+        ])
+        && data.isPublic == true
+        && isValidId(data.internalTicketId) && data.internalTicketId.size() >= 3 && data.internalTicketId.size() <= 64
+        && data.status in ['PENDING', 'LIVE', 'WON', 'LOST', 'VOID', 'PARTIALLY_SETTLED', 'UNVERIFIED']
+        && data.effectiveCombinedOdds is number && data.effectiveCombinedOdds >= 1.0 && data.effectiveCombinedOdds <= 1000000
+        && isValidString(data.shareCode, 0, 32)
+        && isValidString(data.shareUrl, 0, 300)
+        && data.shareCodeVerified is bool
+        && data.bookingCodeStatus in ['GENERATED', 'FAILED', 'NOT_REQUESTED']
+        && isValidString(data.bookingCodeError, 0, 300)
+        && data.selectionSettlements is list && data.selectionSettlements.size() <= 30
+        && (data.selectionSettlements.size() == 0 || data.selectionSettlements[0] is map)
+        && isValidString(data.settledAt, 0, 40)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAdminSettings(data) {
+      return data.keys().hasAll([
+          'updatedByUid', 'updatedByEmail', 'enabled', 'paused', 'minIndividualOdds',
+          'maxIndividualOdds', 'dailyTicketTarget', 'maxTickets', 'minSelections',
+          'maxSelections', 'anyMarket', 'markets', 'windowStartTime', 'windowEndTime',
+          'timezone', 'scheduleIntervalMinutes', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'updatedByUid', 'updatedByEmail', 'enabled', 'paused', 'activeBookmaker',
+          'minIndividualOdds', 'maxIndividualOdds', 'dailyTicketTarget', 'maxTickets', 'minSelections',
+          'maxSelections', 'anyMarket', 'markets', 'windowStartTime', 'windowEndTime',
+          'timezone', 'scheduleIntervalMinutes', 'createdAt', 'updatedAt'
+        ])
+        && data.updatedByUid == request.auth.uid
+        && isValidId(data.updatedByUid)
+        && isValidString(data.updatedByEmail, 3, 254)
+        && data.enabled is bool
+        && data.paused is bool
+        && (!data.keys().hasAny(['activeBookmaker']) || data.activeBookmaker in ['SPORTYBET_TZ', 'BETPAWA_TZ'])
+        && data.minIndividualOdds is number && data.minIndividualOdds >= 1.01 && data.minIndividualOdds <= 100
+        && data.maxIndividualOdds is number && data.maxIndividualOdds >= data.minIndividualOdds && data.maxIndividualOdds <= 1000
+        && data.dailyTicketTarget is number && data.dailyTicketTarget >= 1 && data.dailyTicketTarget <= 200
+        && data.maxTickets is number && data.maxTickets >= 1 && data.maxTickets <= 200
+        && data.minSelections is number && data.minSelections >= 1 && data.minSelections <= 25
+        && data.maxSelections is number && data.maxSelections >= data.minSelections && data.maxSelections <= 25
+        && data.anyMarket is bool
+        && isValidBoundedStringList(data.markets, 20)
+        && isValidString(data.windowStartTime, 4, 10)
+        && isValidString(data.windowEndTime, 4, 10)
+        && isValidString(data.timezone, 1, 60)
+        && data.scheduleIntervalMinutes is number && data.scheduleIntervalMinutes >= 5 && data.scheduleIntervalMinutes <= 1440
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPublicStats(data) {
+      return data.keys().hasAll([
+          'isPublic', 'dailyTicketTarget', 'totalGeneratedToday', 'bookingCodesGeneratedToday',
+          'lastScanningAt', 'lastSettlementAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'isPublic', 'dailyTicketTarget', 'totalGeneratedToday', 'bookingCodesGeneratedToday',
+          'lastScanningAt', 'lastSettlementAt', 'updatedAt'
+        ])
+        && data.isPublic == true
+        && data.dailyTicketTarget is number && data.dailyTicketTarget >= 1 && data.dailyTicketTarget <= 200
+        && data.totalGeneratedToday is number && data.totalGeneratedToday >= 0 && data.totalGeneratedToday <= 500
+        && data.bookingCodesGeneratedToday is number && data.bookingCodesGeneratedToday >= 0 && data.bookingCodesGeneratedToday <= 500
+        && isValidString(data.lastScanningAt, 0, 40)
+        && isValidString(data.lastSettlementAt, 0, 40)
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAdminAuditLog(data) {
+      return data.keys().hasAll([
+          'scope', 'actorUid', 'actorEmail', 'actionType', 'status',
+          'ticketsGenerated', 'codesCreated', 'message', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'scope', 'actorUid', 'actorEmail', 'actionType', 'status',
+          'ticketsGenerated', 'codesCreated', 'message', 'createdAt'
+        ])
+        && data.scope == 'ADMIN_AUDIT'
+        && data.actorUid == request.auth.uid
+        && isValidId(data.actorUid)
+        && isValidString(data.actorEmail, 3, 254)
+        && isValidString(data.actionType, 1, 40)
+        && data.status in ['SUCCESS', 'PARTIAL', 'SKIPPED', 'FAILED']
+        && data.ticketsGenerated is number && data.ticketsGenerated >= 0 && data.ticketsGenerated <= 500
+        && data.codesCreated is number && data.codesCreated >= 0 && data.codesCreated <= 500
+        && isValidString(data.message, 1, 400)
+        && data.createdAt is timestamp;
+    }
+
+    // Admin Role Registry
+    match /admins/{adminUid} {
+      allow get: if isValidId(adminUid) && (isVerifiedOwner(adminUid) || isAdmin());
+      allow list: if isAdmin() && resource.data.role == 'ADMIN';
+      allow create: if isValidId(adminUid)
+        && isAdmin()
+        && isValidAdminRole(incoming(), adminUid)
+        && incoming().createdAt == request.time;
+      allow update, delete: if false;
+    }
+
+    // Shared Public Daily Tickets (All Users Read, Admins Publish/Remove)
+    match /publicTickets/{ticketId} {
+      allow get: if isValidId(ticketId) && resource.data.isPublic == true;
+      allow list: if resource.data.isPublic == true;
+      allow create: if isValidId(ticketId)
+        && isAdmin()
+        && isValidPublicTicket(incoming())
+        && incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isValidId(ticketId) && isAdmin();
+    }
+
+    // Separate Mutable Settlement & Booking Code Updates for Public Tickets
+    match /publicTicketUpdates/{ticketId} {
+      allow get: if isValidId(ticketId) && resource.data.isPublic == true;
+      allow list: if resource.data.isPublic == true;
+      allow create: if isValidId(ticketId)
+        && isAdmin()
+        && isValidPublicTicketUpdate(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(ticketId)
+        && isAdmin()
+        && isValidPublicTicketUpdate(incoming())
+        && incoming().internalTicketId == existing().internalTicketId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && !(existing().status in ['WON', 'LOST', 'VOID'])
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'status', 'effectiveCombinedOdds', 'shareCode', 'shareUrl',
+          'shareCodeVerified', 'bookingCodeStatus', 'bookingCodeError',
+          'selectionSettlements', 'settledAt', 'updatedAt'
+        ]);
+      allow delete: if isValidId(ticketId) && isAdmin();
+    }
+
+    // Public Daily Factory Summary Stats
+    match /publicStats/{statId} {
+      allow get: if isValidId(statId) && resource.data.isPublic == true;
+      allow list: if resource.data.isPublic == true;
+      allow create, update: if isValidId(statId)
+        && isAdmin()
+        && isValidPublicStats(incoming())
+        && incoming().updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    // Restricted Admin Global Settings
+    match /adminSettings/{settingId} {
+      allow get: if isValidId(settingId) && isAdmin();
+      allow list: if isAdmin() && resource.data.timezone is string;
+      allow create: if isValidId(settingId)
+        && isAdmin()
+        && isValidAdminSettings(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(settingId)
+        && isAdmin()
+        && isValidAdminSettings(incoming())
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'updatedByUid', 'updatedByEmail', 'enabled', 'paused', 'activeBookmaker',
+          'minIndividualOdds', 'maxIndividualOdds', 'dailyTicketTarget',
+          'maxTickets', 'minSelections', 'maxSelections', 'anyMarket',
+          'markets', 'windowStartTime', 'windowEndTime', 'timezone',
+          'scheduleIntervalMinutes', 'updatedAt'
+        ]);
+      allow delete: if false;
+    }
+
+    // Immutable Admin Audit Logs
+    match /adminAuditLogs/{logId} {
+      allow get: if isValidId(logId) && isAdmin();
+      allow list: if isAdmin() && resource.data.scope == 'ADMIN_AUDIT';
+      allow create: if isValidId(logId)
+        && isAdmin()
+        && isValidAdminAuditLog(incoming())
+        && incoming().createdAt == request.time;
+      allow update, delete: if false;
+    }
+
+    // Private User Profiles & Personal Subcollections
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isVerifiedOwner(userId);
+      allow list: if false;
+      allow create: if isValidId(userId)
+        && isVerifiedOwner(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && isVerifiedOwner(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'displayName', 'defaultMinOdds', 'defaultMaxOdds',
+          'defaultStakeTzs', 'autoScanIntervalSec',
+          'themePreference', 'preferredBookmaker', 'updatedAt'
+        ]);
+      allow delete: if false;
+
+      match /scanHistory/{scanId} {
+        allow get: if isValidId(userId) && isValidId(scanId) && isVerifiedOwner(userId);
+        allow list: if isValidId(userId) && isVerifiedOwner(userId) && resource.data.userId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(scanId)
+          && isVerifiedOwner(userId)
+          && isValidScanHistory(incoming(), userId)
+          && incoming().createdAt == request.time;
+        allow update: if false;
+        allow delete: if isValidId(userId) && isValidId(scanId) && isVerifiedOwner(userId);
+      }
+
+      match /bookingCodes/{codeId} {
+        allow get: if isValidId(userId) && isValidId(codeId) && isVerifiedOwner(userId);
+        allow list: if isValidId(userId) && isVerifiedOwner(userId) && resource.data.userId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(codeId)
+          && isVerifiedOwner(userId)
+          && isValidBookingCode(incoming(), userId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) && isValidId(codeId)
+          && isVerifiedOwner(userId)
+          && isValidBookingCode(incoming(), userId)
+          && incoming().userId == existing().userId
+          && incoming().shareCode == existing().shareCode
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
+        allow delete: if isValidId(userId) && isValidId(codeId) && isVerifiedOwner(userId);
+      }
+
+      match /presets/{presetId} {
+        allow get: if isValidId(userId) && isValidId(presetId) && isVerifiedOwner(userId);
+        allow list: if isValidId(userId) && isVerifiedOwner(userId) && resource.data.userId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(presetId)
+          && isVerifiedOwner(userId)
+          && isValidFilterPreset(incoming(), userId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) && isValidId(presetId)
+          && isVerifiedOwner(userId)
+          && isValidFilterPreset(incoming(), userId)
+          && incoming().userId == existing().userId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'name', 'minOdds', 'maxOdds', 'markets',
+            'leagues', 'matchStatus', 'maxResults', 'updatedAt'
+          ]);
+        allow delete: if isValidId(userId) && isValidId(presetId) && isVerifiedOwner(userId);
+      }
+
+      match /favorites/{favoriteId} {
+        allow get: if isValidId(userId) && isValidId(favoriteId) && isVerifiedOwner(userId);
+        allow list: if isValidId(userId) && isVerifiedOwner(userId) && resource.data.userId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(favoriteId)
+          && isVerifiedOwner(userId)
+          && isValidFavoriteItem(incoming(), userId)
+          && incoming().createdAt == request.time;
+        allow update: if false;
+        allow delete: if isValidId(userId) && isValidId(favoriteId) && isVerifiedOwner(userId);
+      }
+
+      match /favoriteTickets/{ticketId} {
+        allow get: if isValidId(userId) && isValidId(ticketId) && isVerifiedOwner(userId);
+        allow list: if isValidId(userId) && isVerifiedOwner(userId) && resource.data.userId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(ticketId)
+          && isVerifiedOwner(userId)
+          && isValidFavoriteTicket(incoming(), userId)
+          && incoming().createdAt == request.time;
+        allow update: if false;
+        allow delete: if isValidId(userId) && isValidId(ticketId) && isVerifiedOwner(userId);
+      }
+
+      match /notifications/{notificationId} {
+        allow get: if isValidId(userId) && isValidId(notificationId) && isVerifiedOwner(userId);
+        allow list: if isValidId(userId) && isVerifiedOwner(userId) && resource.data.userId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(notificationId)
+          && isVerifiedOwner(userId)
+          && isValidNotification(incoming(), userId)
+          && incoming().createdAt == request.time;
+        allow update: if isValidId(userId) && isValidId(notificationId)
+          && isVerifiedOwner(userId)
+          && isValidNotification(incoming(), userId)
+          && incoming().userId == existing().userId
+          && incoming().createdAt == existing().createdAt
+          && incoming().diff(existing()).affectedKeys().hasOnly(['read']);
+        allow delete: if isValidId(userId) && isValidId(notificationId) && isVerifiedOwner(userId);
+      }
+
+      match /transfers/{transferId} {
+        allow get: if isValidId(userId) && isValidId(transferId) && isVerifiedOwner(userId);
+        allow list: if isValidId(userId) && isVerifiedOwner(userId) && resource.data.userId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(transferId)
+          && isVerifiedOwner(userId)
+          && isValidTransferRecord(incoming(), userId)
+          && incoming().createdAt == request.time;
+        allow update: if false;
+        allow delete: if isValidId(userId) && isValidId(transferId) && isVerifiedOwner(userId);
+      }
+    }
+  }
+}
